@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, X, Share2, Play, Heart, Trash2, Lock, MoreVertical, Settings2 } from 'lucide-react';
+import { Plus, X, Share2, Play, Heart, Trash2, Lock, MoreVertical, Settings2, Volume2, VolumeX } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 // --- PIN設定 ---
@@ -305,6 +305,7 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
   const [hearts, setHearts] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [videoControlMode, setVideoControlMode] = useState(false); // true = 共有/三点メニュー非表示(動画操作優先)、false = レイヤーON(ハートタップ・共有・投稿が使える)がデフォルト
+  const [muted, setMuted] = useState(true);
   const menuRef = useRef(null);
 
   const handleTap = (e) => {
@@ -318,9 +319,12 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
     }, 700);
   };
 
-  // カードが非アクティブになったら、次に見た時のためにデフォルト(動画操作優先)へ戻しておく
+  // カードが非アクティブになったら、次に見た時のためにデフォルト(動画操作優先・ミュート)へ戻しておく
   useEffect(() => {
-    if (!isActive) setVideoControlMode(false);
+    if (!isActive) {
+      setVideoControlMode(false);
+      setMuted(true);
+    }
   }, [isActive]);
 
   // アクティブなカードの操作モード状態だけを親(App)に伝える
@@ -349,8 +353,8 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
       {/* サムネ→再生の軽量切り替え(全動画同時ロードを避ける) */}
       {isActive ? (
         <iframe
-          key={post.videoId}
-          src={`https://www.youtube.com/embed/${post.videoId}?autoplay=1&mute=1&loop=1&playlist=${post.videoId}&modestbranding=1&rel=0&controls=0`}
+          key={`${post.videoId}-${muted ? 'muted' : 'unmuted'}`}
+          src={`https://www.youtube.com/embed/${post.videoId}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${post.videoId}&modestbranding=1&rel=0&controls=0`}
           className="w-full h-full"
           allow="autoplay; encrypted-media"
           allowFullScreen
@@ -390,11 +394,22 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
         />
       ))}
 
-      {/* 右サイドのアクションバー(右端中央に集約: 共有・削除メニュー・動画操作モード切り替え) */}
+      {/* 右サイドのアクションバー(右端中央に集約: ミュート・共有・削除メニュー・動画操作モード切り替え) */}
       <div
         className="absolute right-3 flex flex-col items-center gap-5 z-10"
         style={{ top: '42%', transform: 'translateY(-50%)' }}
       >
+        {/* ミュート切り替え(常に表示) */}
+        <button onClick={() => setMuted((m) => !m)} className="flex flex-col items-center gap-1">
+          <div
+            className="w-11 h-11 bg-white/15 backdrop-blur-md flex items-center justify-center"
+            style={{ clipPath: 'url(#flowerClip)' }}
+          >
+            {muted ? <VolumeX size={20} className="text-white" /> : <Volume2 size={20} className="text-white" />}
+          </div>
+          <span className="text-white text-xs drop-shadow">{muted ? 'ミュート中' : '音あり'}</span>
+        </button>
+
         <button
           className="flex flex-col items-center gap-1 transition-opacity"
           style={{ opacity: videoControlMode ? 0 : 1, pointerEvents: videoControlMode ? 'none' : 'auto' }}
