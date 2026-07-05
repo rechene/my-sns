@@ -78,16 +78,30 @@ function UploadModal({ onClose, onPosted }) {
   const [pinKnown, setPinKnown] = useState(!!getStoredPin());
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+  const [pinChecking, setPinChecking] = useState(false);
   const [url, setUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handlePinNext = () => {
+  const handlePinNext = async () => {
     if (!pinInput) return;
+    setPinChecking(true);
+    setPinError('');
+
+    const { data: isValid, error: verifyError } = await supabase.rpc('verify_pin', {
+      input_pin: pinInput,
+    });
+
+    setPinChecking(false);
+
+    if (verifyError || !isValid) {
+      setPinError('PINが違います');
+      return;
+    }
+
     storePin(pinInput);
     setPinKnown(true);
-    setPinError('');
   };
 
   const handleSubmit = async () => {
@@ -149,13 +163,13 @@ function UploadModal({ onClose, onPosted }) {
 
           <button
             onClick={handlePinNext}
-            disabled={!pinInput}
+            disabled={!pinInput || pinChecking}
             className="w-full bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white font-medium rounded-lg py-2.5 mt-3 transition-colors"
           >
-            次へ
+            {pinChecking ? '確認中...' : '次へ'}
           </button>
           <p className="text-[11px] text-neutral-500 mt-3 leading-relaxed text-center">
-            この端末では一度入力すれば次回から聞かれません(投稿時にサーバー側で照合されます)
+            この端末では一度入力すれば次回から聞かれません
           </p>
         </div>
       </div>
