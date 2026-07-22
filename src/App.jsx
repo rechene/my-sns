@@ -309,15 +309,24 @@ function DeleteConfirmModal({ postId, onClose, onDeleted }) {
   );
 }
 
-function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
+function VideoCard({ post, isActive, muted, onMutedChange, onRequestDelete, onControlModeChange }) {
   const [hearts, setHearts] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [videoControlMode, setVideoControlMode] = useState(false); // true = 共有/三点メニュー非表示(動画操作優先)、false = レイヤーON(ハートタップ・共有・投稿が使える)がデフォルト
-  const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(true);
   const menuRef = useRef(null);
   const iframeRef = useRef(null);
 
+  // 動画を作り直さずにコマンドだけをYouTube側に伝える(postMessage経由)
+  const sendPlayerCommand = (func) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args: [] }),
+      '*'
+    );
+  };
+
   const handleTap = (e) => {
+    // タップで再生/一時停止を切り替えつつ、ハートも飛ばす
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -328,12 +337,10 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
     }, 700);
   };
 
-  // 動画を作り直さずにミュート状態だけをYouTube側に伝える(postMessage経由)
-  const sendPlayerCommand = (func) => {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func, args: [] }),
-      '*'
-    );
+  const togglePlay = () => {
+    const next = !playing;
+    setPlaying(next);
+    sendPlayerCommand(next ? 'playVideo' : 'pauseVideo');
   };
 
   const [shareCopied, setShareCopied] = useState(false);
@@ -359,16 +366,23 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
 
   const toggleMute = () => {
     const next = !muted;
-    setMuted(next);
+    onMutedChange(next);
     sendPlayerCommand(next ? 'mute' : 'unMute');
   };
 
-  // カードが非アクティブになったら、次に見た時のためにデフォルト(動画操作優先・ミュート)へ戻しておく
+  // アクティブになった時、前のカードから引き継いだ音設定を適用し、再生し直す
   useEffect(() => {
     if (!isActive) {
       setVideoControlMode(false);
-      setMuted(true);
+      setPlaying(true);
+      return;
     }
+    // iframeの準備が整うまで少し待ってからコマンドを送る
+    const timer = setTimeout(() => {
+      sendPlayerCommand(muted ? 'mute' : 'unMute');
+      sendPlayerCommand('playVideo');
+    }, 500);
+    return () => clearTimeout(timer);
   }, [isActive]);
 
   // アクティブなカードの操作モード状態だけを親(App)に伝える
@@ -421,8 +435,18 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
       {!videoControlMode && (
         <div
           className="absolute inset-0 z-[5]"
-          onClick={handleTap}
+          onClick={(e) => {
+            handleTap(e);
+            togglePlay();
+          }}
         />
+      )}
+
+      {/* 一時停止中は中央にアイコンを表示 */}
+      {!playing && isActive && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[6]">
+          <Play size={64} className="text-white/80" fill="white" />
+        </div>
       )}
 
       {/* タップした位置にハートを表示 */}
@@ -567,6 +591,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [activeControlMode, setActiveControlMode] = useState(false); // アクティブなカードが動画操作モード中か(デフォルトはレイヤーON)
+  const [globalMuted, setGlobalMuted] = useState(true); // 音のON/OFFは全カードで共有し、スクロールしても引き継ぐ
   const [showUpload, setShowUpload] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // 削除確認中のpost id
   const containerRef = useRef(null);
@@ -608,12 +633,12 @@ export default function App() {
     const el = containerRef.current;
     if (!el) return;
     const onScroll = () => {
-      const idx = Math.round(el.scrollTop / el.clientHeight);
-      setActiveIndex(idx);
+      const idx = Math.round(el.scrollTop / frameHeight);
+      setActiveIndex(Math.max(0, Math.min(idx, posts.length - 1)));
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [frameHeight, posts.length]);
 
   return (
     <div
@@ -651,6 +676,8 @@ export default function App() {
             <VideoCard
               post={post}
               isActive={i === activeIndex}
+              muted={globalMuted}
+              onMutedChange={setGlobalMuted}
               onRequestDelete={(id) => setDeleteTarget(id)}
               onControlModeChange={setActiveControlMode}
             />
