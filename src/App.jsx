@@ -536,6 +536,20 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
     return () => clearTimeout(timer);
   }, [isActive]);
 
+  // 上の一回きりの指示は、プレイヤーの準備が遅れると届かずに捨てられる。
+  // 音の設定だけは届くまで数秒くり返し送る(同じ指示を何度送っても副作用はない)。
+  useEffect(() => {
+    if (!isActive) return;
+    const send = () => sendPlayerCommand(muted ? 'mute' : 'unMute');
+    send();
+    const interval = setInterval(send, 400);
+    const stop = setTimeout(() => clearInterval(interval), 4000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(stop);
+    };
+  }, [isActive, muted]);
+
   // アクティブなカードの操作モード状態だけを親(App)に伝える
   useEffect(() => {
     if (isActive) onControlModeChange(videoControlMode);
