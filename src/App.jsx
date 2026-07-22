@@ -73,6 +73,12 @@ function extractYouTubeId(url) {
   return null;
 }
 
+// iOSはタップ無しのミュート解除を許さず、その場で動画を止めてしまう。
+// 他のプラットフォームには無い制約なので、ここだけ挙動を分ける。
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 function UploadModal({ onClose, onPosted }) {
   const vh = useViewportHeight();
   const [pinKnown, setPinKnown] = useState(!!getStoredPin());
@@ -467,6 +473,14 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
   const [playing, setPlaying] = useState(true);
   const menuRef = useRef(null);
   const iframeRef = useRef(null);
+  const retryRef = useRef({ interval: null, stop: null });
+
+  // 音設定のくり返し送信を止める
+  const stopRetries = () => {
+    if (retryRef.current.interval) clearInterval(retryRef.current.interval);
+    if (retryRef.current.stop) clearTimeout(retryRef.current.stop);
+    retryRef.current = { interval: null, stop: null };
+  };
 
   // 動画を作り直さずにコマンドだけをYouTube側に伝える(postMessage経由)
   const sendPlayerCommand = (func) => {
@@ -491,6 +505,8 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
   const togglePlay = () => {
     const next = !playing;
     setPlaying(next);
+    // 再生を始めた後に音設定の指示が届くと、iOSではまた止められてしまうので打ち切る
+    if (next) stopRetries();
     sendPlayerCommand(next ? 'playVideo' : 'pauseVideo');
   };
 
@@ -521,62 +537,28 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
     sendPlayerCommand(next ? 'mute' : 'unMute');
   };
 
-  // アクティブになった時、前のカードから引き継いだ音設定を適用し、再生し直す
+  // アクティブになった時、音の設定を適用する
   useEffect(() => {
     if (!isActive) {
       setVideoControlMode(false);
       setPlaying(true);
       return;
     }
-    // iframeの準備が整うまで少し待ってからコマンドを送る
-    const timer = setTimeout(() => {
-      sendPlayerCommand(muted ? 'mute' : 'unMute');
-      sendPlayerCommand('playVideo');
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [isActive]);
 
-  // プレイヤーの実際の再生状態を受け取る。
-  // これが無いと、iOSが勝手に一時停止した時にアプリ側は「再生中」のままになり、
-  // タップ1回目が空振りして2回タップしないと再生できない。
-  useEffect(() => {
-    if (!isActive) return;
+    // iOSは、タップ無しでミュート解除されると動画をその場で止める。
+    // 止まっていると内容を見ないままスクロールされてしまうので再生の継続を優先し、
+    // 新しい動画は必ずミュートで流す。サウンドボタンの表示もOFFに合わせる。
+    if (IS_IOS && !muted) onMutedChange(true);
 
-    const handleMessage = (e) => {
-      if (typeof e.data !== 'string' || !e.origin.includes('youtube')) return;
-      let msg;
-      try {
-        msg = JSON.parse(e.data);
-      } catch {
-        return;
-      }
-      if (msg.event !== 'onStateChange' && msg.event !== 'infoDelivery') return;
+    const command = IS_IOS ? 'mute' : muted ? 'mute' : 'unMute';
+    const send = () => sendPlayerCommand(command);
 
-      // 新しい埋め込みプレイヤーはinfoDelivery、古い形式はonStateChangeで状態を送ってくる
-      let state = null;
-      if (msg.event === 'onStateChange') state = msg.info;
-      else if (msg.info) state = msg.info.playerState;
+    // プレイヤーの準備が終わる時刻は読めないので、0.4秒おきに4秒間くり返す
+    send();
+    retryRef.current.interval = setInterval(send, 400);
+    retryRef.current.stop = setTimeout(stopRetries, 4000);
 
-      if (state === 1) setPlaying(true);  // 再生中
-      if (state === 2) setPlaying(false); // 一時停止
-    };
-    window.addEventListener('message', handleMessage);
-
-    // 状態を通知してもらうよう、プレイヤー側に登録を要求する
-    const askForUpdates = () => {
-      iframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'listening', id: post.id, channel: 'widget' }),
-        '*'
-      );
-    };
-    const t1 = setTimeout(askForUpdates, 500);
-    const t2 = setTimeout(askForUpdates, 1500);
-
-    return () => {
-      window.removeEventListener('message', handleMessage);
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    return stopRetries;
   }, [isActive]);
 
   // アクティブなカードの操作モード状態だけを親(App)に伝える
