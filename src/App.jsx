@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, X, Share2, Play, Heart, Trash2, Lock, MoreVertical, Settings2, Volume2, VolumeX, Check, ShoppingBag } from 'lucide-react';
+import { Plus, X, Share2, Play, Heart, Trash2, Lock, MoreVertical, Settings2, Volume2, VolumeX, Check, ShoppingBag, Pencil } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 // --- PIN設定 ---
@@ -309,7 +309,158 @@ function DeleteConfirmModal({ postId, onClose, onDeleted }) {
   );
 }
 
-function VideoCard({ post, isActive, muted, onMutedChange, onRequestDelete, onControlModeChange }) {
+function EditModal({ post, onClose, onUpdated }) {
+  const vh = useViewportHeight();
+  const [pinKnown, setPinKnown] = useState(!!getStoredPin());
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinChecking, setPinChecking] = useState(false);
+  const [url, setUrl] = useState(`https://youtube.com/shorts/${post.videoId}`);
+  const [caption, setCaption] = useState(post.caption === '(no caption)' ? '' : post.caption);
+  const [shopUrl, setShopUrl] = useState(post.shopUrl || '');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handlePinNext = async () => {
+    if (!pinInput) return;
+    setPinChecking(true);
+    setPinError('');
+
+    const { data: isValid, error: verifyError } = await supabase.rpc('verify_pin', {
+      input_pin: pinInput,
+    });
+
+    setPinChecking(false);
+
+    if (verifyError || !isValid) {
+      setPinError('PINが違います');
+      return;
+    }
+
+    storePin(pinInput);
+    setPinKnown(true);
+  };
+
+  const handleSubmit = async () => {
+    const videoId = extractYouTubeId(url.trim());
+    if (!videoId) {
+      setError('YouTubeのURLを正しく入力してください');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+
+    const pin = getStoredPin();
+    const { error: rpcError } = await supabase.rpc('update_post_with_pin', {
+      input_pin: pin,
+      input_post_id: post.id,
+      input_video_id: videoId,
+      input_caption: caption.trim() || '(no caption)',
+      input_shop_url: shopUrl.trim() || null,
+    });
+
+    setSubmitting(false);
+
+    if (rpcError) {
+      clearStoredPin();
+      setPinKnown(false);
+      setPinError('PINが違います。もう一度入力してください');
+      return;
+    }
+
+    onUpdated();
+    onClose();
+  };
+
+  // --- PIN未確認の場合はまずPIN入力画面を出す ---
+  if (!pinKnown) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+        <div className="w-full max-w-sm bg-neutral-900 rounded-2xl p-5 border border-neutral-800">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+              <Lock size={18} /> PINを入力
+            </h2>
+            <button onClick={onClose} className="text-neutral-400 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
+
+          <input
+            type="password"
+            value={pinInput}
+            onChange={(e) => { setPinInput(e.target.value); setPinError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && handlePinNext()}
+            placeholder="PINコード"
+            autoFocus
+            className="w-full bg-neutral-800 text-white text-sm rounded-lg px-3 py-2.5 mb-1 outline-none focus:ring-2 focus:ring-red-500 placeholder:text-neutral-500 tracking-widest text-center"
+          />
+          {pinError && <p className="text-red-400 text-xs mb-2 text-center">{pinError}</p>}
+
+          <button
+            onClick={handlePinNext}
+            disabled={!pinInput || pinChecking}
+            className="w-full bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white font-medium rounded-lg py-2.5 mt-3 transition-colors"
+          >
+            {pinChecking ? '確認中...' : '次へ'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+      <div
+        className="w-full max-w-sm bg-neutral-900 rounded-2xl p-5 border border-neutral-800 overflow-y-auto"
+        style={{ maxHeight: vh * 0.9 }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-semibold text-lg">投稿を編集</h2>
+          <button onClick={onClose} className="text-neutral-400 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        <label className="text-xs text-neutral-400 mb-1 block">YouTube URL</label>
+        <input
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setError(''); }}
+          placeholder="https://youtube.com/shorts/..."
+          className="w-full bg-neutral-800 text-white text-sm rounded-lg px-3 py-2.5 mb-1 outline-none focus:ring-2 focus:ring-red-500 placeholder:text-neutral-500"
+        />
+        {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
+
+        <label className="text-xs text-neutral-400 mb-1 block mt-3">キャプション</label>
+        <textarea
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="この投稿について..."
+          rows={2}
+          className="w-full bg-neutral-800 text-white text-sm rounded-lg px-3 py-2.5 mb-4 outline-none focus:ring-2 focus:ring-red-500 resize-none placeholder:text-neutral-500"
+        />
+
+        <label className="text-xs text-neutral-400 mb-1 block">ショップURL(任意)</label>
+        <input
+          value={shopUrl}
+          onChange={(e) => setShopUrl(e.target.value)}
+          placeholder="https://booth.pm/..."
+          className="w-full bg-neutral-800 text-white text-sm rounded-lg px-3 py-2.5 mb-4 outline-none focus:ring-2 focus:ring-red-500 placeholder:text-neutral-500"
+        />
+
+        <button
+          onClick={handleSubmit}
+          disabled={!url.trim() || submitting}
+          className="w-full bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white font-medium rounded-lg py-2.5 transition-colors"
+        >
+          {submitting ? '更新中...' : '更新'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VideoCard({ post, isActive, muted, onMutedChange, onRequestEdit, onRequestDelete, onControlModeChange }) {
   const [hearts, setHearts] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [videoControlMode, setVideoControlMode] = useState(false); // true = 共有/三点メニュー非表示(動画操作優先)、false = レイヤーON(ハートタップ・共有・投稿が使える)がデフォルト
@@ -555,6 +706,16 @@ function VideoCard({ post, isActive, muted, onMutedChange, onRequestDelete, onCo
               <button
                 onClick={() => {
                   setMenuOpen(false);
+                  onRequestEdit(post);
+                }}
+                className="w-full text-left px-4 py-3 text-sm text-white hover:bg-neutral-800 flex items-center gap-2 border-b border-neutral-800"
+              >
+                <Pencil size={16} />
+                編集
+              </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
                   onRequestDelete(post.id);
                 }}
                 className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-neutral-800 flex items-center gap-2"
@@ -594,6 +755,7 @@ export default function App() {
   const [globalMuted, setGlobalMuted] = useState(true); // 音のON/OFFは全カードで共有し、スクロールしても引き継ぐ
   const [showUpload, setShowUpload] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // 削除確認中のpost id
+  const [editTarget, setEditTarget] = useState(null); // 編集中のpostオブジェクト
   const containerRef = useRef(null);
 
   const fetchPosts = async () => {
@@ -679,6 +841,7 @@ export default function App() {
               muted={globalMuted}
               onMutedChange={setGlobalMuted}
               onRequestDelete={(id) => setDeleteTarget(id)}
+              onRequestEdit={(p) => setEditTarget(p)}
               onControlModeChange={setActiveControlMode}
             />
           </div>
@@ -714,6 +877,14 @@ export default function App() {
           postId={deleteTarget}
           onClose={() => setDeleteTarget(null)}
           onDeleted={fetchPosts}
+        />
+      )}
+
+      {editTarget && (
+        <EditModal
+          post={editTarget}
+          onClose={() => setEditTarget(null)}
+          onUpdated={fetchPosts}
         />
       )}
       </div>
