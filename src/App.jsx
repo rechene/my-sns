@@ -153,7 +153,6 @@ function UploadModal({ onClose, onPosted }) {
 
           <input
             type="password"
-            inputMode="numeric"
             value={pinInput}
             onChange={(e) => { setPinInput(e.target.value); setPinError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && handlePinNext()}
@@ -279,7 +278,6 @@ function DeleteConfirmModal({ postId, onClose, onDeleted }) {
           <>
             <input
               type="password"
-              inputMode="numeric"
               value={pinInput}
               onChange={(e) => { setPinInput(e.target.value); setPinError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
@@ -341,7 +339,7 @@ function VideoCard({ post, isActive, onRequestDelete, onControlModeChange }) {
   const [shareCopied, setShareCopied] = useState(false);
 
   const handleShare = async () => {
-    const shareUrl = `https://youtube.com/watch?v=${post.videoId}`;
+    const shareUrl = `${window.location.origin}${window.location.pathname}?post=${post.id}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: 'MECHENE', text: post.caption, url: shareUrl });
@@ -580,15 +578,24 @@ export default function App() {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setPosts(
-        data.map((row) => ({
-          id: row.id,
-          videoId: row.video_id,
-          caption: row.caption,
-          author: row.author,
-          shopUrl: row.shop_url,
-        }))
-      );
+      let mapped = data.map((row) => ({
+        id: row.id,
+        videoId: row.video_id,
+        caption: row.caption,
+        author: row.author,
+        shopUrl: row.shop_url,
+      }));
+
+      // 共有URL(?post=ID)経由で開いた場合、その投稿を先頭に来るよう配列を回転させる
+      const sharedId = new URLSearchParams(window.location.search).get('post');
+      if (sharedId) {
+        const idx = mapped.findIndex((p) => String(p.id) === sharedId);
+        if (idx > 0) {
+          mapped = [...mapped.slice(idx), ...mapped.slice(0, idx)];
+        }
+      }
+
+      setPosts(mapped);
     }
     setLoading(false);
   };
