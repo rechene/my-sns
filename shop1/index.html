@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+<title>RECHENE</title>
+<link rel="manifest" href="./manifest.json" />
+<link rel="apple-touch-icon" href="./icon.png" />
+<link rel="icon" href="./icon.png" />
+<meta name="theme-color" content="#0a0a0a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="RECHENE" />
+
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --fg: #f5f5f5;
+    --dim: #8a8a8a;
+    --line: #242424;
+    --accent: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100svh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+  }
+  .card { width: 100%; max-width: 340px; text-align: center; }
+
+  .avatar {
+    width: 132px;
+    height: 132px;
+    margin: 0 auto 1.25rem;
+    clip-path: url(#petal);
+    background: var(--accent);
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  h1 {
+    margin: 0 0 .35rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+  }
+  .sub { margin: 0 0 2rem; font-size: .8125rem; color: var(--dim); letter-spacing: .04em; }
+
+  .open {
+    display: block;
+    width: 100%;
+    padding: .95rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .12s ease;
+  }
+  .open:active { transform: scale(.97); }
+  .open:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+  .guide {
+    margin-top: 2.25rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    text-align: left;
+  }
+  .guide h2 {
+    margin: 0 0 .9rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--fg);
+    letter-spacing: .04em;
+  }
+  ol { margin: 0; padding-left: 1.15rem; }
+  li { font-size: .8125rem; color: var(--dim); line-height: 1.85; }
+  li b { color: var(--fg); font-weight: 600; }
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .open { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <clipPath id="petal" clipPathUnits="objectBoundingBox">
+      <path d="M 0.5000 0.1350 A 0.1150 0.1150 0 0 1 0.7145 0.2047 A 0.1150 0.1150 0 0 1 0.8471 0.3872 A 0.1150 0.1150 0 0 1 0.8471 0.6128 A 0.1150 0.1150 0 0 1 0.7145 0.7953 A 0.1150 0.1150 0 0 1 0.5000 0.8650 A 0.1150 0.1150 0 0 1 0.2855 0.7953 A 0.1150 0.1150 0 0 1 0.1529 0.6128 A 0.1150 0.1150 0 0 1 0.1529 0.3872 A 0.1150 0.1150 0 0 1 0.2855 0.2047 A 0.1150 0.1150 0 0 1 0.5000 0.1350 Z"/>
+    </clipPath>
+  </defs>
+</svg>
+
+<main class="card">
+  <div class="avatar"><img src="./icon.png" alt="" /></div>
+
+  <h1>RECHENE</h1>
+  <p class="sub">最新の動画をまとめて見れます</p>
+
+  <a class="open" href="../?shop=shop1">動画を見る</a>
+
+  <section class="guide">
+    <h2>ホーム画面に追加すると、次からすぐ開けます</h2>
+
+    <ol id="ios" hidden>
+      <li>画面下の<b>共有ボタン</b>をタップ</li>
+      <li>メニューを下にスクロール</li>
+      <li><b>「ホーム画面に追加」</b>を選ぶ</li>
+    </ol>
+
+    <ol id="android" hidden>
+      <li>画面右上の<b>メニュー(⋮)</b>をタップ</li>
+      <li><b>「アプリをインストール」</b>を選ぶ</li>
+    </ol>
+  </section>
+</main>
+
+<script>
+  // すでにホーム画面から開かれている場合は、案内を挟まずアプリへ
+  var installed = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  if (installed) {
+    location.replace('../?shop=shop1');
+  }
+
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  document.getElementById(isIOS ? 'ios' : 'android').hidden = false;
+</script>
+
+</body>
+</html>
