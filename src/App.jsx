@@ -578,7 +578,7 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
         <iframe
           ref={iframeRef}
           key={post.videoId}
-          src={`https://www.youtube.com/embed/${post.videoId}?autoplay=1&mute=1&loop=1&playlist=${post.videoId}&modestbranding=1&rel=0&controls=0&enablejsapi=1`}
+          src={`https://www.youtube.com/embed/${post.videoId}?autoplay=1&mute=1&loop=1&playlist=${post.videoId}&modestbranding=1&rel=0&controls=0&enablejsapi=1&playsinline=1`}
           className="w-full h-full"
           allow="autoplay; encrypted-media"
           allowFullScreen
