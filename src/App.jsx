@@ -623,8 +623,8 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
         />
       )}
 
-      {/* 一時停止中は中央にアイコンを表示 */}
-      {!playing && isActive && (
+      {/* 一時停止中は中央にアイコンを表示(レイヤーOFF中はタップ操作ができないので出さない) */}
+      {!playing && isActive && !videoControlMode && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[6]">
           <Play size={64} className="text-white/80" fill="white" />
         </div>
@@ -687,11 +687,13 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
           onClick={() => {
             setVideoControlMode((v) => {
               const next = !v;
-              // レイヤーON(false)に切り替わる時、一時停止中なら再生を再開して三角形を消す
-              if (!next && !playing) {
+              // レイヤーON(next=false)にする時だけ、一時停止中かどうかに関わらず強制的に再生する
+              // (停止中かの判別に頼らず、ON時は常に再生状態にする方針)
+              if (!next) {
                 setPlaying(true);
                 sendPlayerCommand('playVideo');
               }
+              // レイヤーOFF(next=true)の時は再生状態に一切触れない
               return next;
             });
           }}
