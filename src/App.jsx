@@ -683,7 +683,20 @@ function VideoCard({ post, isActive, muted, onMutedChange, siteName, onRequestEd
         </button>
 
         {/* 動画操作モードの切り替え(常に表示) */}
-        <button onClick={() => setVideoControlMode((v) => !v)} className="flex flex-col items-center gap-1">
+        <button
+          onClick={() => {
+            setVideoControlMode((v) => {
+              const next = !v;
+              // レイヤーON(false)に切り替わる時、一時停止中なら再生を再開して三角形を消す
+              if (!next && !playing) {
+                setPlaying(true);
+                sendPlayerCommand('playVideo');
+              }
+              return next;
+            });
+          }}
+          className="flex flex-col items-center gap-1"
+        >
           <div
             className="w-11 h-11 backdrop-blur-md flex items-center justify-center transition-colors"
             style={{
